@@ -38,22 +38,22 @@ def make_diff(a, b):
 
 
 with st.sidebar:
-    st.header("⚙️ Settings")
-    st.write("Choose language for accurate analysis")
-    side_lang = st.selectbox("Language", LANGS, index=0)
-    st.divider()
+    st.header("⚙️ CodeLens")
+    st.write("AI-powered review & agentic fix")
     with st.expander("ℹ️ About"):
-        st.write(
-            "Built for GenAI Build Sprint. Uses LLM + local validator + agentic retry. GitHub: MArbeeGit/codelens-ai"
-        )
-        st.write("Free tier with caching & rate-limit handling.")
+        st.write("Built for GenAI Build Sprint. LLM + local validator + agentic retry.")
+        st.write("GitHub: MArbeeGit/codelens-ai")
+    st.divider()
+    st.write("💡 Tip: Use tabs above to choose input method")
 
 tab1, tab2, tab3 = st.tabs(["📝 Paste Code", "🔗 GitHub Import", "📦 Multi-File ZIP"])
 
 with tab1:
-    st.info(
-        "**How to use:** 1. Paste your code below → 2. Click **Review** to find bugs → 3. Click **Fix** to get patched code with diff"
+    st.markdown("**How to use:**")
+    st.markdown(
+        "1. Select language & paste code below\n2. Click **Review** to find bugs\n3. Click **Fix** to get patched code + diff"
     )
+    lang1 = st.selectbox("Language", LANGS, index=0, key="lang1")
     code = st.text_area(
         "Code",
         height=280,
@@ -71,7 +71,7 @@ with tab1:
         )
     if do_review:
         c = code
-        l = side_lang
+        l = lang1
         if not c.strip():
             st.warning("⚠️ Paste code first")
         else:
@@ -127,16 +127,20 @@ with tab1:
                 st.error(str(e))
 
 with tab2:
-    st.info(
-        "**How to use:** 1. Copy a GitHub **file** URL (…/blob/main/path/file.py) → 2. Paste below → 3. Click **Fetch & Review** → 4. **Fix** if needed"
+    st.markdown("**How to use:**")
+    st.markdown(
+        "1. Copy GitHub **file** URL (`.../blob/main/path/file.py`)\n2. Paste below\n3. Click **Fetch & Review**\n4. Click **Fix** if needed"
     )
-    st.write(
+    st.caption(
         "Example: `https://github.com/MArbeeGit/codelens-ai/blob/main/core/validator.py`"
     )
     gh = st.text_input(
         "GitHub file URL",
         placeholder="https://github.com/user/repo/blob/main/file.py",
         key="gh_url",
+    )
+    lang2 = st.selectbox(
+        "Language (auto-detected from file)", LANGS, index=0, key="lang2"
     )
     g1, g2 = st.columns(2)
     with g1:
@@ -158,14 +162,14 @@ with tab2:
             status = st.status("📥 Fetching & reviewing...", expanded=True)
             try:
                 c, fn = fetch_github(gh)
-                l = fn.split(".")[-1] if "." in fn else side_lang
+                l = fn.split(".")[-1] if "." in fn else lang2
                 mp = {
                     "py": "python",
                     "js": "javascript",
                     "java": "java",
                     "cpp": "cpp",
                     "ts": "typescript",
-                }.get(l, side_lang)
+                }.get(l, lang2)
                 st.info(f"Fetched `{fn}` ({len(c)} chars) — detected `{mp}`")
                 j, _ = review_code(c, mp)
                 status.update(label=f"✅ Reviewed {fn}", state="complete")
@@ -210,16 +214,15 @@ with tab2:
                 st.error(str(e))
 
 with tab3:
-    st.info(
-        "**How to use:** 1. Create a ZIP with 4-5 code files (.py/.js/.java/.cpp/.ts) → 2. Upload → 3. Click **Review & Fix All** → 4. Download `patched.zip` + `REPORT.md`"
+    st.markdown("**How to use:**")
+    st.markdown(
+        "1. Create ZIP with 4-5 code files (`.py`/`.js`/`.java`/`.cpp`/`.ts`)\n2. Upload below\n3. Click **Review & Fix All**\n4. Download `patched.zip` + `REPORT.md`"
     )
+    lang3 = st.selectbox("Default language", LANGS, index=0, key="zip_lang")
     ups = st.file_uploader(
         "ZIP or files",
         type=["zip", "py", "js", "java", "cpp", "ts"],
         accept_multiple_files=True,
-    )
-    zip_lang = st.selectbox(
-        "Default language (for unknown extensions)", LANGS, index=0, key="zip_lang"
     )
     if st.button("Review & Fix All", type="primary", use_container_width=True):
         if not ups:
@@ -258,7 +261,7 @@ with tab3:
                                     "java": "java",
                                     "cpp": "cpp",
                                     "ts": "typescript",
-                                }.get(l, zip_lang)
+                                }.get(l, lang3)
                                 j, _ = review_code(code, mp)
                                 out_md += f"**{name}** ({mp}) — {len(j.get('bugs', []))} issues | {j.get('summary', '')[:80]}\n\n"
                                 report += f"## {name} — {len(j.get('bugs', []))} issues\n{j.get('summary', '')}\n\n"
@@ -268,16 +271,20 @@ with tab3:
                                     patched[name] = fix.get("fixed_code", code)
                                 except:
                                     patched[name] = code
-                    else:
-                        code = up.getvalue().decode(errors="ignore")[:6000]
-                        j, _ = review_code(code, zip_lang)
-                        out_md += f"**{up.name}** — {len(j.get('bugs', []))} issues\n\n"
-                        combined[up.name] = j
-                        try:
-                            fix, _ = fix_code(code, j, zip_lang)
-                            patched[up.name] = fix.get("fixed_code", code)
-                        except:
-                            patched[up.name] = code
+                else:
+                    if ups and len(ups) == 1 and not ups[0].name.endswith(".zip"):
+                        for up in ups:
+                            code = up.getvalue().decode(errors="ignore")[:6000]
+                            j, _ = review_code(code, lang3)
+                            out_md += (
+                                f"**{up.name}** — {len(j.get('bugs', []))} issues\n\n"
+                            )
+                            combined[up.name] = j
+                            try:
+                                fix, _ = fix_code(code, j, lang3)
+                                patched[up.name] = fix.get("fixed_code", code)
+                            except:
+                                patched[up.name] = code
                 status.update(
                     label=f"✅ Reviewed {len(combined)} file(s)", state="complete"
                 )
