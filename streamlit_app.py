@@ -119,23 +119,7 @@ with tab2:
         if not ups:
             st.warning("Upload ZIP")
         else:
-            tmpdir = tempfile.mkdtemp()
-            zip_path = None
-            for up in ups:
-                p = os.path.join(tmpdir, up.name)
-                with open(p, "wb") as f:
-                    f.write(up.getbuffer())
-                zip_path = p if up.name.endswith(".zip") else None
-            import app as gradio_app
-
-            # reuse logic via temp files
-            files = [
-                open(os.path.join(tmpdir, f), "rb")
-                if not f.endswith(".zip")
-                else os.path.join(tmpdir, f)
-                for f in os.listdir(tmpdir)
-            ]
-            # simplified: call core directly
+            # call core directly
             out_md = ""
             combined = {}
             patched = {}
