@@ -22,12 +22,14 @@ def _hash(prompt, model):
     return hashlib.sha256(f"{model}::{prompt}".encode()).hexdigest()[:16]
 
 
-def _call_gemini(prompt, model, api_key, retries=2):
+def _call_gemini(prompt, model, api_key, system=None, retries=2):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 3000},
     }
+    if system:
+        payload["systemInstruction"] = {"parts": [{"text": system}]}
     for i in range(retries + 1):
         try:
             r = requests.post(url, json=payload, timeout=30)
@@ -45,15 +47,14 @@ def _call_gemini(prompt, model, api_key, retries=2):
     raise RuntimeError("gemini failed")
 
 
-def _call_nvidia(prompt, api_key, model="meta/llama-3.1-70b-instruct"):
+def _call_nvidia(prompt, api_key, model="meta/llama-3.1-70b-instruct", system=None):
     url = "https://integrate.api.nvidia.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
-        "max_tokens": 3000,
-    }
+    msgs = []
+    if system:
+        msgs.append({"role": "system", "content": system})
+    msgs.append({"role": "user", "content": prompt})
+    payload = {"model": model, "messages": msgs, "temperature": 0.2, "max_tokens": 3000}
     for i in range(3):
         r = requests.post(url, json=payload, headers=headers, timeout=40)
         if r.status_code == 429:
@@ -64,32 +65,31 @@ def _call_nvidia(prompt, api_key, model="meta/llama-3.1-70b-instruct"):
     raise RuntimeError("nvidia 429")
 
 
-def generate(prompt, use_cache=True):
+def generate(prompt, use_cache=True, system=None):
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     nvidia_key = os.getenv("NVIDIA_API_KEY")
+    if nvidia_key and "your_nvidia" in nvidia_key:
+        nvidia_key = None
     model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     nvidia_model = os.getenv("NVIDIA_MODEL", "meta/llama-3.1-70b-instruct")
-
-    h = _hash(prompt, model)
+    h = _hash((system or "") + prompt, model)
     if use_cache and h in _cache:
         return _cache[h], True, "cache"
-
     last_err = None
     if gemini_key:
         try:
-            out = _call_gemini(prompt, model, gemini_key)
+            out = _call_gemini(prompt, model, gemini_key, system=system)
             _cache[h] = out
             _save_cache()
             return out, False, model
         except Exception as e:
             last_err = str(e)
-
     if nvidia_key:
         try:
-            h2 = _hash(prompt, nvidia_model)
+            h2 = _hash((system or "") + prompt, nvidia_model)
             if use_cache and h2 in _cache:
                 return _cache[h2], True, "cache"
-            out = _call_nvidia(prompt, nvidia_key, nvidia_model)
+            out = _call_nvidia(prompt, nvidia_key, nvidia_model, system=system)
             _cache[h2] = out
             _save_cache()
             return out, False, nvidia_model

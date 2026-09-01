@@ -26,6 +26,24 @@ def validate(code, lang):
         return True, "OK"
 
 
+INJECTION_RE = re.compile(
+    r"(ignore\s+previous|disregard\s+instructions|system\s*:|jailbreak|do\s+anything\s+now)",
+    re.I,
+)
+
+
+def detect_injection(code):
+    return bool(INJECTION_RE.search(code or ""))
+
+
+def sanitize(code):
+    return (
+        (code or "")
+        .replace("<CODE>", "&lt;CODE&gt;")
+        .replace("</CODE>", "&lt;/CODE&gt;")[:6000]
+    )
+
+
 def extract_json(text):
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
