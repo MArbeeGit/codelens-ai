@@ -37,6 +37,21 @@ def make_diff(a, b):
     )
 
 
+EXT_MAP = {
+    "python": ".py",
+    "javascript": ".js",
+    "java": ".java",
+    "cpp": ".cpp",
+    "c": ".c",
+    "typescript": ".ts",
+    "go": ".go",
+}
+
+
+def ext_for(lang):
+    return EXT_MAP.get((lang or "python").lower(), ".txt")
+
+
 with st.sidebar:
     st.header("⚙️ CodeLens")
     st.write("AI-powered review & agentic fix")
@@ -121,7 +136,11 @@ with tab1:
                 st.subheader("Diff")
                 st.code(diff, language="diff")
                 st.info(res.get("explanation", ""))
-                st.download_button("⬇️ Download fixed", fc, file_name="fixed.txt")
+                st.download_button(
+                    "⬇️ Download fixed",
+                    fc,
+                    file_name=f"fixed{ext_for(st.session_state['lang'])}",
+                )
             except Exception as e:
                 status.update(label="❌ Fix failed", state="error")
                 st.error(str(e))
@@ -207,7 +226,10 @@ with tab2:
                 st.code(fc, language=st.session_state["gh_lang"])
                 st.code(diff, language="diff")
                 st.download_button(
-                    "⬇️ Download fixed", fc, file_name="fixed.txt", key="dl_gh"
+                    "⬇️ Download fixed",
+                    fc,
+                    file_name=f"fixed{ext_for(st.session_state['gh_lang'])}",
+                    key="dl_gh",
                 )
             except Exception as e:
                 status.update(label="❌ Fix failed", state="error")
