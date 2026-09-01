@@ -60,20 +60,29 @@ with tab1:
         l = lang
         if gh.strip():
             try:
+                st.toast(f"Fetching {gh[:40]}...")
                 c, fn = fetch_github(gh)
                 l = fn.split(".")[-1] if "." in fn else l
-                st.info(f"Fetched {fn}")
+                st.info(f"Fetched {fn} ({len(c)} chars)")
             except Exception as e:
                 st.error(f"Fetch error: {e}")
                 c = ""
         if not c.strip():
-            st.warning("Paste code or GitHub URL")
+            st.warning("⚠️ Paste code or GitHub URL — Code box is empty")
         else:
-            with st.spinner("Reviewing..."):
+            status = st.status(
+                "🔍 Reviewing with gemini-3.5-flash-lite...", expanded=True
+            )
+            try:
                 j, _ = review_code(c, l)
+                status.update(
+                    label=f"✅ Reviewed ({j.get('_model', '')}{' cached' if j.get('_cached') else ''}) — scroll down",
+                    state="complete",
+                )
                 st.session_state["review"] = j
                 st.session_state["code"] = c
                 st.session_state["lang"] = l
+                st.divider()
                 st.subheader(
                     f"Summary ({j.get('_model', '')}{' cached' if j.get('_cached') else ''})"
                 )
@@ -81,15 +90,23 @@ with tab1:
                 st.write(f"**Complexity:** {j.get('complexity', '-')}")
                 bugs = j.get("bugs", [])
                 if bugs:
-                    st.table(bugs)
+                    st.dataframe(bugs, use_container_width=True)
+                    st.success(f"Found {len(bugs)} issue(s) — now click **2. Fix**")
                 else:
-                    st.success("No bugs found")
-                st.json(j)
+                    st.success("✅ No bugs found")
+                with st.expander("Show JSON (for evaluation)", expanded=False):
+                    st.json(j)
+            except Exception as e:
+                status.update(label="❌ Review failed", state="error")
+                st.error(f"Error: {e}")
     if do_fix:
         if "review" not in st.session_state:
-            st.warning("Run Review first")
+            st.warning("⚠️ Run **1. Review** first, then Fix")
         else:
-            with st.spinner("Fixing..."):
+            status = st.status(
+                "🔧 Fixing (agentic retry + validator)...", expanded=True
+            )
+            try:
                 res, _ = fix_code(
                     st.session_state["code"],
                     st.session_state["review"],
@@ -97,13 +114,22 @@ with tab1:
                 )
                 fc = res.get("fixed_code", "")
                 diff = res.get("diff", "") or make_diff(st.session_state["code"], fc)
+                status.update(
+                    label=f"✅ Fixed — Valid: {res.get('_valid')} {res.get('_validator_msg', '')}",
+                    state="complete",
+                )
                 st.session_state["fixed"] = fc
+                st.subheader("Fixed Code")
                 st.code(fc, language=st.session_state["lang"])
+                st.subheader("Diff")
                 st.code(diff, language="diff")
                 st.info(
                     f"Model: {res.get('_model', '')} | Valid: {res.get('_valid')} {res.get('_validator_msg', '')} | {res.get('explanation', '')}"
                 )
-                st.download_button("Download fixed", fc, file_name="fixed.txt")
+                st.download_button("⬇️ Download fixed", fc, file_name="fixed.txt")
+            except Exception as e:
+                status.update(label="❌ Fix failed", state="error")
+                st.error(f"Error: {e}")
 
 with tab2:
     st.write(
